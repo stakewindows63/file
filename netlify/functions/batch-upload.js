@@ -65,7 +65,7 @@ async function githubJson(url, config, options = {}) {
 }
 
 async function createCommit(files, config) {
-  const refUrl = `${API_ROOT}/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/git/ref/heads/${encodeURIComponent(config.branch)}`;
+  const refUrl = `${API_ROOT}/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/git/refs/heads/${encodeURIComponent(config.branch)}`;
   const ref = await githubJson(refUrl, config);
   const parentCommitSha = ref.object?.sha;
   if (!parentCommitSha) throw new Error('The configured branch does not have a commit yet.');

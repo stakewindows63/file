@@ -79,6 +79,10 @@
             <div class="photo-capture hidden" id="photo-capture">
               <div class="preview-wrap">
                 <img id="photo-preview" alt="Selected capture preview" />
+                <div class="batch-preview-panel hidden" id="batch-preview-panel" aria-label="Selected gallery files">
+                  <div class="batch-file-list" id="batch-file-list"></div>
+                  <button class="batch-add-more" id="batch-add-more" type="button"><span>＋</span> Add more files</button>
+                </div>
                 <div class="preview-overlay"><span class="preview-tag">LOCAL ONLY</span><span id="preview-resolution">—</span></div>
               </div>
               <div class="photo-details">
@@ -89,6 +93,13 @@
             <div class="drop-hint" id="drop-hint">PNG, JPG, WEBP · compressed locally before upload</div>
           </div>
           <div class="capture-footer"><span><span class="pulse-dot"></span> image processing happens locally</span><span id="capture-state">awaiting capture</span></div>
+          <div class="gallery-upload-bar">
+            <div class="gallery-copy">
+              <span class="gallery-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.7"/><circle cx="9" cy="9" r="1.6" stroke="currentColor" stroke-width="1.5"/><path d="m5.5 17 4.1-4 2.8 2.5 2.3-2.2 3.8 3.7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <span><strong>Already have a photo?</strong><small>Pick one directly from your gallery.</small></span>
+            </div>
+            <button class="gallery-button" id="gallery-button" type="button">Upload from gallery <span>↗</span></button>
+          </div>
         </div>
 
         <aside class="side-column">
@@ -131,6 +142,7 @@
   </div>
 
   <input class="visually-hidden" type="file" id="camera-input" accept="image/*" capture="environment" />
+  <input class="visually-hidden" type="file" id="gallery-input" accept="image/*" multiple />
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
   <div class="modal-backdrop hidden" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
@@ -160,6 +172,5 @@
 
   <script src="config.js"></script>
   <script src="app.js"></script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3d1967fa924f043',t:'MTc4OTc0NzQ4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3d22357bfaf4621',t:'MTc4OTc1MzI1MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>

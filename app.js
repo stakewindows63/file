@@ -2,7 +2,9 @@ const FUNCTION_ROOT = '/.netlify/functions';
 const CONFIG_KEY = 'snapline_config_v2';
 const ACTIVITY_KEY = 'snapline_activity_v2';
 const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
-const MAX_FUNCTION_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_FUNCTION_IMAGE_BYTES = 3.5 * 1024 * 1024;
+const MAX_BATCH_BYTES = 3.5 * 1024 * 1024;
+const MAX_BATCH_FILES = 12;
 
 const EMBEDDED_CONFIG = (() => {
   const value = window.SNAPLINE_CONFIG;
@@ -16,6 +18,7 @@ const EMBEDDED_CONFIG = (() => {
 
 const $ = (selector) => document.querySelector(selector);
 const cameraInput = $('#camera-input');
+const galleryInput = $('#gallery-input');
 const captureStage = $('#capture-stage');
 const emptyCapture = $('#empty-capture');
 const photoCapture = $('#photo-capture');
@@ -30,10 +33,12 @@ const helpModal = $('#help-modal');
 const settingsForm = $('#settings-form');
 const settingsError = $('#settings-error');
 
-let selectedFile = null;
+let selectedFiles = [];
 let savedConfig = null;
 let transientConfig = null;
-let previewObjectUrl = '';
+let previewObjectUrls = [];
+let selectionMode = 'camera';
+let galleryAppendMode = false;
 
 function getStoredConfig() {
   try {
@@ -290,13 +295,21 @@ function chooseImage() {
   cameraInput.click();
 }
 
+function chooseGallery(append = false) {
+  galleryAppendMode = append;
+  galleryInput.click();
+}
+
 function clearPreview() {
-  selectedFile = null;
-  if (previewObjectUrl) {
-    URL.revokeObjectURL(previewObjectUrl);
-    previewObjectUrl = '';
-  }
+  selectedFiles = [];
+  previewObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+  previewObjectUrls = [];
   photoPreview.removeAttribute('src');
+  photoPreview.classList.remove('hidden');
+  $('#batch-file-list').innerHTML = '';
+  $('#batch-preview-panel').classList.add('hidden');
+  selectionMode = 'camera';
+  galleryAppendMode = false;
   emptyCapture.classList.remove('hidden');
   photoCapture.classList.add('hidden');
   captureState.textContent = 'awaiting capture';
@@ -320,32 +333,84 @@ function readImageDimensions(file) {
 }
 
 function updatePreviewMeta(dimensions) {
-  previewResolution.textContent = dimensions.width && dimensions.height
-    ? `${dimensions.width} × ${dimensions.height}`
-    : 'image preview';
-  selectedFileName.textContent = selectedFile.name;
-  selectedFileSize.textContent = formatBytes(selectedFile.size);
+  const count = selectedFiles.length;
+  const galleryMode = selectionMode === 'gallery';
+  const countLabel = `${count} file${count === 1 ? '' : 's'} selected`;
+  previewResolution.textContent = galleryMode
+    ? countLabel
+    : dimensions.width && dimensions.height
+      ? `${dimensions.width} × ${dimensions.height}`
+      : 'image preview';
+  selectedFileName.textContent = galleryMode ? countLabel : selectedFiles[0].name;
+  selectedFileSize.textContent = formatBytes(selectedFiles.reduce((total, file) => total + file.size, 0));
   const fileIcon = document.querySelector('.file-icon');
-  fileIcon.textContent = selectedFile.type.split('/')[1]?.slice(0, 4).toUpperCase() || 'IMG';
+  fileIcon.textContent = galleryMode ? 'FILES' : selectedFiles[0].type.split('/')[1]?.slice(0, 4).toUpperCase() || 'IMG';
 }
 
-async function handlePhoto(file) {
-  if (!file || !file.type.startsWith('image/')) {
-    showToast('Please choose an image file.', 'error');
+function renderBatchFileList() {
+  const list = $('#batch-file-list');
+  list.innerHTML = '';
+  selectedFiles.forEach((file, index) => {
+    const row = document.createElement('div');
+    row.className = 'batch-file-row';
+    const type = file.type.split('/')[1]?.slice(0, 4).toUpperCase() || 'IMG';
+    row.innerHTML = `<button class="batch-remove" type="button" aria-label="Remove ${escapeHtml(file.name)}" title="Remove file">×</button><span class="batch-file-type">${escapeHtml(type)}</span><span class="batch-file-copy"><strong>${escapeHtml(file.name)}</strong><small>${escapeHtml(formatBytes(file.size))}</small></span>`;
+    row.querySelector('.batch-remove').addEventListener('click', () => removeSelectedFile(index));
+    list.appendChild(row);
+  });
+  updatePreviewMeta({ width: 0, height: 0 });
+}
+
+function removeSelectedFile(index) {
+  selectedFiles = selectedFiles.filter((file, fileIndex) => fileIndex !== index);
+  if (!selectedFiles.length) {
+    clearPreview();
     return;
   }
-  if (file.size > MAX_SOURCE_BYTES) {
-    showToast('That image is over 20 MB. Choose a smaller photo.', 'error');
+  if (selectionMode === 'gallery') {
+    renderBatchFileList();
+    captureState.textContent = `${selectedFiles.length} files ready to review`;
+  }
+}
+
+async function handleFiles(fileList, mode = 'gallery') {
+  const files = Array.from(fileList || []).filter((file) => file?.type?.startsWith('image/'));
+  if (!files.length) {
+    showToast('Please choose one or more image files.', 'error');
     return;
   }
+  const combinedFiles = mode === 'gallery' && galleryAppendMode ? [...selectedFiles, ...files] : files;
+  galleryAppendMode = false;
+  if (combinedFiles.length > MAX_BATCH_FILES) {
+    showToast(`Choose up to ${MAX_BATCH_FILES} photos at a time.`, 'error');
+    return;
+  }
+  const oversized = combinedFiles.find((file) => file.size > MAX_SOURCE_BYTES);
+  if (oversized) {
+    showToast('One of the selected images is over 20 MB. Choose smaller photos.', 'error');
+    return;
+  }
+
   clearPreview();
-  selectedFile = file;
-  previewObjectUrl = URL.createObjectURL(file);
-  photoPreview.src = previewObjectUrl;
+  selectedFiles = combinedFiles;
+  selectionMode = mode;
   emptyCapture.classList.add('hidden');
   photoCapture.classList.remove('hidden');
-  captureState.textContent = 'ready to review';
-  const dimensions = await readImageDimensions(file);
+  captureState.textContent = mode === 'gallery'
+    ? `${selectedFiles.length} file${selectedFiles.length === 1 ? '' : 's'} ready to review`
+    : 'ready to review';
+
+  if (mode === 'gallery') {
+    photoPreview.removeAttribute('src');
+    photoPreview.classList.add('hidden');
+    $('#batch-preview-panel').classList.remove('hidden');
+    renderBatchFileList();
+    return;
+  }
+
+  previewObjectUrls = [URL.createObjectURL(selectedFiles[0])];
+  photoPreview.src = previewObjectUrls[0];
+  const dimensions = await readImageDimensions(selectedFiles[0]);
   updatePreviewMeta(dimensions);
 }
 
@@ -366,7 +431,7 @@ async function loadImage(file) {
 }
 
 async function prepareUpload(file) {
-  const canKeepOriginal = file.size <= 3.25 * 1024 * 1024 && file.type !== 'image/heic' && file.type !== 'image/heif';
+  const canKeepOriginal = file.size <= 2.75 * 1024 * 1024 && file.type !== 'image/heic' && file.type !== 'image/heif';
   if (canKeepOriginal) {
     const dataUrl = await fileToDataUrl(file);
     return {
@@ -427,10 +492,41 @@ function buildTargetPath(fileName, config) {
   return folder ? `${folder}/${fileName}` : fileName;
 }
 
+function makeBatches(files) {
+  const batches = [];
+  let current = [];
+  let currentBytes = 0;
+  files.forEach((file) => {
+    const wouldExceed = current.length && currentBytes + file.bytes > MAX_BATCH_BYTES;
+    if (wouldExceed) {
+      batches.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(file);
+    currentBytes += file.bytes;
+  });
+  if (current.length) batches.push(current);
+  return batches;
+}
+
+function activityFromUpload(item, config) {
+  const path = item.path || buildTargetPath(item.name, config);
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+  return {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name: item.name,
+    path,
+    repo: repoLabel(config.repo),
+    time: new Date().toISOString(),
+    url: item.url || `https://github.com/${config.repo}/blob/${encodeURIComponent(config.branch || 'main')}/${encodedPath}`
+  };
+}
+
 async function publishPhoto() {
   const config = currentConfig();
-  if (!selectedFile) {
-    showToast('Capture an image before sending it.', 'error');
+  if (!selectedFiles.length) {
+    showToast('Capture or choose at least one image before sending it.', 'error');
     return;
   }
   if (!config || !repoParts(config.repo)) {
@@ -440,36 +536,35 @@ async function publishPhoto() {
   }
 
   setBusy(publishButton, true, '.publish-button-label', 'Preparing…');
-  captureState.textContent = 'preparing local image';
+  captureState.textContent = `preparing ${selectedFiles.length} photo${selectedFiles.length === 1 ? '' : 's'}`;
   try {
-    const prepared = await prepareUpload(selectedFile);
-    const localPath = buildTargetPath(prepared.name, config);
-    setBusy(publishButton, true, '.publish-button-label', 'Sending…');
-    captureState.textContent = 'sending through secure function';
-    const { data } = await functionRequest('upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        filename: prepared.name,
-        content: prepared.base64,
-        mime: prepared.mime
-      })
-    });
+    const preparedFiles = [];
+    for (let index = 0; index < selectedFiles.length; index += 1) {
+      setBusy(publishButton, true, '.publish-button-label', `Preparing ${index + 1}/${selectedFiles.length}…`);
+      preparedFiles.push(await prepareUpload(selectedFiles[index]));
+    }
 
-    const path = data?.path || localPath;
-    const activity = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      name: prepared.name,
-      path,
-      repo: repoLabel(config.repo),
-      time: new Date().toISOString(),
-      url: data?.url || `https://github.com/${config.repo}/blob/${encodeURIComponent(config.branch || 'main')}/${path.split('/').map(encodeURIComponent).join('/')}`
-    };
-    const items = [activity, ...getActivity().filter((item) => item.path !== path)];
-    setActivity(items);
-    renderActivity();
-    captureState.textContent = 'published successfully';
-    showToast(`Published ${path} to GitHub.`, 'success', 6000);
+    const batches = makeBatches(preparedFiles);
+    const uploadedActivities = [];
+    for (let index = 0; index < batches.length; index += 1) {
+      const batch = batches[index];
+      setBusy(publishButton, true, '.publish-button-label', `Sending ${index + 1}/${batches.length}…`);
+      captureState.textContent = `sending ${uploadedActivities.length}/${preparedFiles.length} photos`;
+      const { data } = await functionRequest('batch-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: batch.map((file) => ({ filename: file.name, content: file.base64, mime: file.mime }))
+        })
+      });
+      (data?.files || []).forEach((item) => uploadedActivities.push(activityFromUpload(item, config)));
+      const items = [...uploadedActivities, ...getActivity().filter((item) => !uploadedActivities.some((uploaded) => uploaded.path === item.path))];
+      setActivity(items);
+      renderActivity();
+    }
+
+    captureState.textContent = `published ${uploadedActivities.length} photo${uploadedActivities.length === 1 ? '' : 's'}`;
+    showToast(`Published ${uploadedActivities.length} photo${uploadedActivities.length === 1 ? '' : 's'} to GitHub.`, 'success', 6500);
   } catch (error) {
     captureState.textContent = 'upload failed';
     showToast(readableError(error, error.response), 'error', 6500);
@@ -508,6 +603,8 @@ function wireEvents() {
   $('#open-camera').addEventListener('click', chooseImage);
   $('#choose-file').addEventListener('click', chooseImage);
   $('#stage-cta').addEventListener('click', chooseImage);
+  $('#gallery-button').addEventListener('click', () => chooseGallery(false));
+  $('#batch-add-more').addEventListener('click', () => chooseGallery(true));
   $('#retake-photo').addEventListener('click', chooseImage);
   $('#remove-photo').addEventListener('click', clearPreview);
   $('#publish-photo').addEventListener('click', publishPhoto);
@@ -522,7 +619,11 @@ function wireEvents() {
   settingsForm.addEventListener('submit', handleSettingsSubmit);
   cameraInput.addEventListener('change', (event) => {
     const [file] = event.target.files || [];
-    if (file) handlePhoto(file);
+    if (file) handleFiles([file], 'camera');
+    event.target.value = '';
+  });
+  galleryInput.addEventListener('change', (event) => {
+    if (event.target.files?.length) handleFiles(event.target.files, 'gallery');
     event.target.value = '';
   });
   ['dragenter', 'dragover'].forEach((eventName) => captureStage.addEventListener(eventName, (event) => {
@@ -534,8 +635,7 @@ function wireEvents() {
     captureStage.classList.remove('drag-active');
   }));
   captureStage.addEventListener('drop', (event) => {
-    const [file] = event.dataTransfer.files || [];
-    if (file) handlePhoto(file);
+    if (event.dataTransfer.files?.length) handleFiles(event.dataTransfer.files, 'gallery');
   });
   [settingsModal, helpModal].forEach((modal) => modal.addEventListener('click', (event) => {
     if (event.target === modal) closeModal(modal);

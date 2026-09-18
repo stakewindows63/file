@@ -6,5 +6,5 @@ window.SNAPLINE_CONFIG = {
   repo: 'file',
   branch: 'main',
   folder: '',
-  token: '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'
+  token: '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'
 };
